@@ -1,35 +1,55 @@
-from dateutil import parser
+import requests
 import spacy
 from spacy.matcher import Matcher
-from spacy.lang.en import English
-from bs4 import BeautifulSoup
 import re
-import requests
-
+# Load the English language model in spaCy
 nlp = spacy.load("en_core_web_sm")
 
-url = 'https://www.hofstra.edu/admission/apply.html'
+# Define a pattern to match dates in various formats
+date_pattern = r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+[A-Za-z]+\s+\d{2,4}|\d{1,2}[/-]\d{1,2}'
+
+# Define a pattern to match associated text
+text_pattern = r'.{0,50}(Submission|Deadline|Due Date|Application Deadline|Last Date to Apply).{0,50}'
+
+# Define a spaCy matcher to find the date and associated text
+matcher = Matcher(nlp.vocab)
+matcher.add("Date", None, [{"TEXT": {"REGEX": date_pattern}}])
+matcher.add("Text", None, [{"TEXT": {"REGEX": text_pattern}}])
+
+# Define a function to find the most suitable phrase for a given date
+def find_associated_text(html, date):
+    # Parse the HTML with spaCy
+    doc = nlp(html)
+
+    # Find all matches of the date pattern using the matcher
+    date_matches = matcher("Date", doc)
+
+    # Iterate over the date matches and find the most suitable phrase
+    best_match = None
+    best_score = 0
+    for _, start, end in date_matches:
+        date_text = doc[start:end].text
+        score = date_text.similarity(nlp(date))
+        if score > best_score:
+            # Find all matches of the text pattern within 50 characters of the date
+            text_matches = matcher("Text", doc[start-50:end+50])
+            for _, start_text, end_text in text_matches:
+                text = doc[start_text:end_text].text
+                if best_match is None or score > best_score:
+                    best_match = text
+                    best_score = score
+
+    # Return the most suitable phrase
+    return best_match
+
+# Example usage
+url = "https://www.hofstra.edu/admission/apply.html"
 response = requests.get(url)
-html = response.content
-# Extract text content from HTML using BeautifulSoup
-soup = BeautifulSoup(html, 'html.parser')
-text = soup.get_text()
-unique_matches = ['November 15, 2023','May 1, 2023']
-
-# Convert matches to datetime objects
-date_objs = [nlp(match)[0] for match in unique_matches]
-
-# Use spaCy's named entity recognition (NER) to find associated text labels
-doc = nlp(text)
-labels = []
-for ent in doc.ents:
-    if ent.label_ == "DATE" and ent in date_objs:
-        # Find the sentence containing the date
-        sent = ent.sent
-        # Find the text associated with the date label
-        label = sent.text.replace(str(ent), "").strip()
-        labels.append(label)
-
-# Return a list of tuples containing the matched dates and their associated text labels
-results = list(zip(unique_matches, labels))
-print(results)
+if response.status_code == 200:
+    html = response.text
+    dates = re.findall(date_pattern, html)
+    for date in dates:
+        text = find_associated_text(html, date)
+        print(f"{date}: {text}")
+else:
+    print(f"Failed to retrieve HTML: {response.status_code}")
