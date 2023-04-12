@@ -7,14 +7,15 @@ nlp = spacy.load("en_core_web_sm")
 
 # Define a pattern to match dates in various formats
 date_pattern = r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+[A-Za-z]+\s+\d{2,4}|\d{1,2}[/-]\d{1,2}'
+# date_pattern = r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b(?:[ ./-]*\d{1,2}[ ./-]*(?:\d{2,4})?)?'        # Extract the HTML content from the response.
 
 # Define a pattern to match associated text
 text_pattern = r'.{0,50}(Submission|Deadline|Due Date|Application Deadline|Last Date to Apply).{0,50}'
 
 # Define a spaCy matcher to find the date and associated text
 matcher = Matcher(nlp.vocab)
-matcher.add("Date", None, [{"TEXT": {"REGEX": date_pattern}}])
-matcher.add("Text", None, [{"TEXT": {"REGEX": text_pattern}}])
+matcher.add("Date", [{"TEXT": {"REGEX": date_pattern}}])
+matcher.add("Text", [{"TEXT": {"REGEX": text_pattern}}])
 
 # Define a function to find the most suitable phrase for a given date
 def find_associated_text(html, date):
